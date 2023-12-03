@@ -2,6 +2,9 @@ package ru.bahusdivus.bilgeadamtest.services
 
 import org.springframework.stereotype.Service
 import ru.bahusdivus.bilgeadamtest.controllers.dto.Response
+import ru.bahusdivus.bilgeadamtest.exceptions.UnprocessableCsvException
+import ru.bahusdivus.bilgeadamtest.exceptions.UnreachableUrlException
+import java.io.IOException
 import java.net.URL
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -9,6 +12,7 @@ import java.time.format.DateTimeFormatter
 @Service
 class EvaluationService {
 
+    // filter out all params that don't match url1, url2, etc. and convert them to URLs
     fun getEvaluation(allParams: Map<String, String>) = allParams
         .filter { it.key.matches("^url\\d+$".toRegex()) }
         .map { URL(it.value) }
@@ -34,12 +38,14 @@ class EvaluationService {
         numSpeechesIn2012: MutableMap<String, Int>,
         numSpeechesAboutSecurity: MutableMap<String, Int>,
         numWordsInSpeeches: MutableMap<String, Int>
-    ) {
+    ) = try {
         url.openConnection().getInputStream().bufferedReader().useLines { lines ->
             lines.forEachIndexed { i, line ->
                 if (i != 0) processLine(line, numSpeechesIn2012, numSpeechesAboutSecurity, numWordsInSpeeches)
             }
         }
+    } catch (e: IOException) {
+        throw UnreachableUrlException("Could not load url: $url")
     }
 
     private fun processLine(
@@ -49,7 +55,7 @@ class EvaluationService {
         numWordsInSpeeches: MutableMap<String, Int>,
     ) {
         val columns = line.split(";")
-        assert(columns.size == 4) { "Wrong number of columns in line: $line" }
+        if (columns.size != 4) throw UnprocessableCsvException("Wrong number of columns in line: $line")
 
         val speaker = columns[0]
         val topic = columns[1]
